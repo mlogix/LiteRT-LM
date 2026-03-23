@@ -222,7 +222,7 @@ absl::Status BindTensor(const TensorBuffer& tensor_buffer, ml_drift::ValueId ten
 
 // static
 absl::StatusOr<std::unique_ptr<TopKMetalSampler>> TopKMetalSampler::Create(
-    Environment* env, int batch_size, int vocab_size,
+    Environment* env, int batch_size, int sequence_size, int vocab_size,
     std::optional<ActivationDataType> activation_data_type, SamplerParameters sampler_params) {
   RET_CHECK(env != nullptr) << "Input Environment is null.";
   RET_CHECK_GT(batch_size, 0) << "Batch size must be positive.";
@@ -265,7 +265,7 @@ absl::StatusOr<std::unique_ptr<TopKMetalSampler>> TopKMetalSampler::Create(
 
   TransformerConfig config = {
       .batch_size = batch_size,
-      .sequence_size = 1,
+      .sequence_size = sequence_size,
       .vocab_size = vocab_size,
       .max_top_k = sampler_params.k(),
   };
@@ -581,7 +581,7 @@ absl::Status TopKMetalSampler::SetInputTensorsAndInferenceFunc(
 
 // C API implementations for TopKMetalSampler.
 int LiteRtTopKMetalSampler_Create(
-    LiteRtEnvironment env, int batch_size, int vocab_size,
+    LiteRtEnvironment env, int batch_size, int sequence_size, int vocab_size,
     const LiteRtTopKMetalSampler_ActivationDataType* activation_data_type,
     const LiteRtTopKMetalSampler_SamplerParameters* sampler_params,
     LiteRtTopKMetalSampler_Sampler** sampler_out, char** error_msg) {
@@ -605,7 +605,7 @@ int LiteRtTopKMetalSampler_Create(
                 *reinterpret_cast<const litert::lm::ActivationDataType*>(activation_data_type))
           : std::nullopt;
 
-  auto sampler = litert::lm::TopKMetalSampler::Create(&cpp_env, batch_size, vocab_size,
+  auto sampler = litert::lm::TopKMetalSampler::Create(&cpp_env, batch_size, sequence_size, vocab_size,
                                                       std::move(cpp_activation_data_type),
                                                       std::move(cpp_sampler_params));
   SAMPLER_RETURN_AND_SET_ERROR_IF_NOT_OK(sampler.status(), error_msg);
@@ -735,7 +735,7 @@ int LiteRtTopKMetalSampler_SetInputTensorsAndInferenceFunc(
 #if defined(LITERT_LM_USE_STATIC_LINKED_GPU_SAMPLER)
 // Function pointers defined in sampler_factory.cc.
 extern "C" int (*LiteRtTopKMetalSampler_Create_Static)(
-    LiteRtEnvironment env, int batch_size, int vocab_size,
+    LiteRtEnvironment env, int batch_size, int sequence_size, int vocab_size,
     const LiteRtTopKMetalSampler_ActivationDataType* activation_data_type,
     const LiteRtTopKMetalSampler_SamplerParameters* sampler_params,
     LiteRtTopKMetalSampler_Sampler** sampler_out, char** error_msg);

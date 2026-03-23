@@ -1016,8 +1016,7 @@ absl::Status LlmLiteRtCompiledModelExecutorBase::DecodeInternal(
   }
   if (signatures_.input_int32_param.has_value()) {
     RETURN_IF_ERROR(FillSingleBufferCacheParamTensor(
-        decode_input_buffers_[signatures_.input_int32_param.value()], step,
-        1));
+        decode_input_buffers_[signatures_.input_int32_param.value()], step, 1));
   }
 
   return BindTensorsAndRunDecode(&output_logits);
@@ -1287,9 +1286,10 @@ absl::Status LlmLiteRtCompiledModelExecutorBase::InitializeSampler(
   sampler_params.set_p(0.0f);
   sampler_params.set_temperature(1.0f);
   sampler_params.set_seed(0);
-  ASSIGN_OR_RETURN(sampler_, CreateSampler(sampler_backend, output_heads,
-                                           std::move(sampler_params),
-                                           env_.Get(), vocab_size, data_type));
+  ASSIGN_OR_RETURN(
+      sampler_,
+      CreateSampler(sampler_backend, output_heads, std::move(sampler_params),
+                    env_.Get(), /*sequence_size=*/1, vocab_size, data_type));
 
   // If the sampler can handle input, prepare the input tensors for it.
   sampler_handles_input_ =

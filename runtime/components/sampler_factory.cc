@@ -51,7 +51,7 @@ using LiteRtTopKSampler_SamplerParameters = void;
 
 // OpenCL Sampler C API function pointers.
 extern "C" int (*LiteRtTopKOpenClSampler_Create_Static)(
-    LiteRtEnvironment env, int batch_size, int vocab_size,
+    LiteRtEnvironment env, int batch_size, int sequence_size, int vocab_size,
     const LiteRtTopKSampler_ActivationDataType* activation_data_type,
     const LiteRtTopKSampler_SamplerParameters* sampler_params,
     LiteRtTopKSampler_Sampler** sampler_out, char** error_msg) = nullptr;
@@ -71,7 +71,7 @@ extern "C" int (*LiteRtTopKOpenClSampler_UpdateConfig_Static)(
 
 // WebGPU Sampler C API function pointers.
 extern "C" int (*LiteRtTopKWebGpuSampler_Create_Static)(
-    LiteRtEnvironment env, int batch_size, int vocab_size,
+    LiteRtEnvironment env, int batch_size, int sequence_size, int vocab_size,
     const LiteRtTopKSampler_ActivationDataType* activation_data_type,
     const LiteRtTopKSampler_SamplerParameters* sampler_params,
     LiteRtTopKSampler_Sampler** sampler_out, char** error_msg) = nullptr;
@@ -108,7 +108,7 @@ extern "C" int (
 
 // Metal Sampler C API function pointers.
 extern "C" int (*LiteRtTopKMetalSampler_Create_Static)(
-    LiteRtEnvironment env, int batch_size, int vocab_size,
+    LiteRtEnvironment env, int batch_size, int sequence_size, int vocab_size,
     const LiteRtTopKSampler_ActivationDataType* activation_data_type,
     const LiteRtTopKSampler_SamplerParameters* sampler_params,
     LiteRtTopKSampler_Sampler** sampler_out, char** error_msg) = nullptr;
@@ -157,7 +157,7 @@ absl::Status CreateStatusAndFreeErrorMsg(int error_code, char* error_msg) {
 class TopKCApiSampler : public Sampler {
  public:
   using LiteRtTopKSampler_Create = int (*)(
-      LiteRtEnvironment env, int batch_size, int vocab_size,
+      LiteRtEnvironment env, int batch_size, int sequence_size, int vocab_size,
       const LiteRtTopKSampler_ActivationDataType* absl_nullable
           activation_data_type,
       const LiteRtTopKSampler_SamplerParameters* absl_nullable sampler_params,
@@ -353,7 +353,7 @@ class TopKCApiSampler : public Sampler {
 class TopKOpenClCApiSampler : public TopKCApiSampler {
  public:
   static absl::StatusOr<std::unique_ptr<TopKOpenClCApiSampler>> Create(
-      LiteRtEnvironment env, int batch_size, int vocab_size,
+      LiteRtEnvironment env, int batch_size, int sequence_size, int vocab_size,
       std::optional<ActivationDataType> activation_data_type,
       proto::SamplerParameters sampler_params) {
     std::unique_ptr<TopKSamplerCApi> capi;
@@ -382,11 +382,11 @@ class TopKOpenClCApiSampler : public TopKCApiSampler {
 
     LiteRtTopKSampler_Sampler* sampler = nullptr;
     char* error_msg = nullptr;
-    int error_code = capi->create_func(env, batch_size, vocab_size,
-                                       activation_data_type.has_value()
-                                           ? &activation_data_type.value()
-                                           : nullptr,
-                                       &sampler_params, &sampler, &error_msg);
+    int error_code = capi->create_func(
+        env, batch_size, sequence_size, vocab_size,
+        activation_data_type.has_value() ? &activation_data_type.value()
+                                         : nullptr,
+        &sampler_params, &sampler, &error_msg);
     RETURN_IF_ERROR(CreateStatusAndFreeErrorMsg(error_code, error_msg));
     ABSL_CHECK(sampler);
     return absl::WrapUnique(
@@ -419,7 +419,7 @@ class TopKOpenClCApiSampler : public TopKCApiSampler {
 class TopKWebGpuCApiSampler : public TopKCApiSampler {
  public:
   static absl::StatusOr<std::unique_ptr<TopKWebGpuCApiSampler>> Create(
-      LiteRtEnvironment env, int batch_size, int vocab_size,
+      LiteRtEnvironment env, int batch_size, int sequence_size, int vocab_size,
       std::optional<ActivationDataType> activation_data_type,
       proto::SamplerParameters sampler_params) {
     std::unique_ptr<TopKSamplerCApi> capi;
@@ -458,11 +458,11 @@ class TopKWebGpuCApiSampler : public TopKCApiSampler {
 
     LiteRtTopKSampler_Sampler* sampler = nullptr;
     char* error_msg = nullptr;
-    int error_code = capi->create_func(env, batch_size, vocab_size,
-                                       activation_data_type.has_value()
-                                           ? &activation_data_type.value()
-                                           : nullptr,
-                                       &sampler_params, &sampler, &error_msg);
+    int error_code = capi->create_func(
+        env, batch_size, sequence_size, vocab_size,
+        activation_data_type.has_value() ? &activation_data_type.value()
+                                         : nullptr,
+        &sampler_params, &sampler, &error_msg);
     RETURN_IF_ERROR(CreateStatusAndFreeErrorMsg(error_code, error_msg));
     ABSL_CHECK(sampler);
     return absl::WrapUnique(
@@ -502,7 +502,7 @@ class TopKWebGpuCApiSampler : public TopKCApiSampler {
 class TopKMetalCApiSampler : public TopKCApiSampler {
  public:
   static absl::StatusOr<std::unique_ptr<TopKMetalCApiSampler>> Create(
-      LiteRtEnvironment env, int batch_size, int vocab_size,
+      LiteRtEnvironment env, int batch_size, int sequence_size, int vocab_size,
       std::optional<ActivationDataType> activation_data_type,
       proto::SamplerParameters sampler_params) {
     std::unique_ptr<TopKSamplerCApi> capi;
@@ -537,11 +537,11 @@ class TopKMetalCApiSampler : public TopKCApiSampler {
 
     LiteRtTopKSampler_Sampler* sampler = nullptr;
     char* error_msg = nullptr;
-    int error_code = capi->create_func(env, batch_size, vocab_size,
-                                       activation_data_type.has_value()
-                                           ? &activation_data_type.value()
-                                           : nullptr,
-                                       &sampler_params, &sampler, &error_msg);
+    int error_code = capi->create_func(
+        env, batch_size, sequence_size, vocab_size,
+        activation_data_type.has_value() ? &activation_data_type.value()
+                                         : nullptr,
+        &sampler_params, &sampler, &error_msg);
     RETURN_IF_ERROR(CreateStatusAndFreeErrorMsg(error_code, error_msg));
     RET_CHECK(sampler);
     return absl::WrapUnique(new TopKMetalCApiSampler(std::move(capi), sampler));
@@ -577,7 +577,8 @@ class TopKMetalCApiSampler : public TopKCApiSampler {
 };
 
 absl::StatusOr<std::unique_ptr<Sampler>> CreateCpuSampler(
-    int batch_size, proto::SamplerParameters sampler_params) {
+    int batch_size, int sequence_size,
+    proto::SamplerParameters sampler_params) {
   switch (sampler_params.type()) {
     case proto::SamplerParameters::TYPE_UNSPECIFIED:
       ABSL_LOG(INFO) << "Sampler type is unspecified. Assume the LLM Executor "
@@ -586,7 +587,7 @@ absl::StatusOr<std::unique_ptr<Sampler>> CreateCpuSampler(
     case proto::SamplerParameters::TOP_P:
       return TopPSampler::Create(sampler_params.k(), sampler_params.p(),
                                  sampler_params.temperature(), batch_size,
-                                 /*sequence_size=*/1, sampler_params.seed());
+                                 sequence_size, sampler_params.seed());
     default:
       return absl::UnimplementedError(absl::StrCat(
           "Sampler type: ", sampler_params.type(), " not implemented yet."));
@@ -595,7 +596,7 @@ absl::StatusOr<std::unique_ptr<Sampler>> CreateCpuSampler(
 
 absl::StatusOr<std::unique_ptr<Sampler>> CreateGpuSampler(
     int batch_size, proto::SamplerParameters sampler_params,
-    LiteRtEnvironment env, int vocab_size,
+    LiteRtEnvironment env, int sequence_size, int vocab_size,
     std::optional<ActivationDataType> activation_data_type) {
   // Check environment options to determine the preferred backend.
   auto cpp_env = litert::Environment::WrapCObject(env, litert::OwnHandle::kNo);
@@ -614,8 +615,9 @@ absl::StatusOr<std::unique_ptr<Sampler>> CreateGpuSampler(
 
 #ifdef __ANDROID__
 #if LITERT_HAS_OPENCL_SUPPORT  // NOLINT(misc-include-cleaner)
-  auto opencl_sampler = TopKOpenClCApiSampler::Create(
-      env, batch_size, vocab_size, activation_data_type, sampler_params);
+  auto opencl_sampler =
+      TopKOpenClCApiSampler::Create(env, batch_size, sequence_size, vocab_size,
+                                    activation_data_type, sampler_params);
   if (opencl_sampler.ok() ||
       opencl_sampler.status().code() != absl::StatusCode::kUnavailable) {
     return opencl_sampler;
@@ -625,8 +627,9 @@ absl::StatusOr<std::unique_ptr<Sampler>> CreateGpuSampler(
 #endif  // LITERT_HAS_OPENCL_SUPPORT
 
 #if LITERT_HAS_WEBGPU_SUPPORT  // NOLINT(misc-include-cleaner)
-  auto webgpu_sampler = TopKWebGpuCApiSampler::Create(
-      env, batch_size, vocab_size, activation_data_type, sampler_params);
+  auto webgpu_sampler =
+      TopKWebGpuCApiSampler::Create(env, batch_size, sequence_size, vocab_size,
+                                    activation_data_type, sampler_params);
   if (webgpu_sampler.ok() ||
       webgpu_sampler.status().code() != absl::StatusCode::kUnavailable) {
     return webgpu_sampler;
@@ -638,8 +641,9 @@ absl::StatusOr<std::unique_ptr<Sampler>> CreateGpuSampler(
 #else  // !__ANDROID__
 #if defined(__APPLE__)
   if (use_metal || !use_webgpu) {
-    auto metal_sampler = TopKMetalCApiSampler::Create(
-        env, batch_size, vocab_size, activation_data_type, sampler_params);
+    auto metal_sampler =
+        TopKMetalCApiSampler::Create(env, batch_size, sequence_size, vocab_size,
+                                     activation_data_type, sampler_params);
     if (metal_sampler.ok() ||
         metal_sampler.status().code() != absl::StatusCode::kUnavailable) {
       return metal_sampler;
@@ -655,8 +659,9 @@ absl::StatusOr<std::unique_ptr<Sampler>> CreateGpuSampler(
 #endif  // __APPLE__
 
 #if LITERT_HAS_WEBGPU_SUPPORT  // NOLINT(misc-include-cleaner)
-  auto webgpu_sampler = TopKWebGpuCApiSampler::Create(
-      env, batch_size, vocab_size, activation_data_type, sampler_params);
+  auto webgpu_sampler =
+      TopKWebGpuCApiSampler::Create(env, batch_size, sequence_size, vocab_size,
+                                    activation_data_type, sampler_params);
   if (webgpu_sampler.ok() ||
       webgpu_sampler.status().code() != absl::StatusCode::kUnavailable) {
     return webgpu_sampler;
@@ -666,8 +671,9 @@ absl::StatusOr<std::unique_ptr<Sampler>> CreateGpuSampler(
 #endif                         // LITERT_HAS_WEBGPU_SUPPORT
 
 #if LITERT_HAS_OPENCL_SUPPORT  // NOLINT(misc-include-cleaner)
-  auto opencl_sampler = TopKOpenClCApiSampler::Create(
-      env, batch_size, vocab_size, activation_data_type, sampler_params);
+  auto opencl_sampler =
+      TopKOpenClCApiSampler::Create(env, batch_size, sequence_size, vocab_size,
+                                    activation_data_type, sampler_params);
   if (opencl_sampler.ok() ||
       opencl_sampler.status().code() != absl::StatusCode::kUnavailable) {
     return opencl_sampler;
@@ -684,8 +690,10 @@ absl::StatusOr<std::unique_ptr<Sampler>> CreateGpuSampler(
 
 absl::StatusOr<std::unique_ptr<Sampler>> CreateSampler(
     Backend backend, int batch_size, proto::SamplerParameters sampler_params,
-    LiteRtEnvironment env, std::optional<int> vocab_size,
+    LiteRtEnvironment env, std::optional<int> sequence_size,
+    std::optional<int> vocab_size,
     std::optional<ActivationDataType> activation_data_type) {
+  int sequence_size_value = sequence_size.value_or(1);
   switch (backend) {
     case Backend::GPU: {
       RET_CHECK(env != nullptr)
@@ -693,8 +701,8 @@ absl::StatusOr<std::unique_ptr<Sampler>> CreateSampler(
       RET_CHECK(vocab_size.has_value())
           << "Vocabulary size is needed for GPU sampling.";
       auto sampler_or =
-          CreateGpuSampler(batch_size, sampler_params, env, vocab_size.value(),
-                           activation_data_type);
+          CreateGpuSampler(batch_size, sampler_params, env, sequence_size_value,
+                           vocab_size.value(), activation_data_type);
       if (sampler_or.ok() ||
           sampler_or.status().code() != absl::StatusCode::kUnavailable) {
         // For a normal failure or success, return the result.
@@ -709,7 +717,7 @@ absl::StatusOr<std::unique_ptr<Sampler>> CreateSampler(
       ABSL_FALLTHROUGH_INTENDED;
     }
     case Backend::CPU:
-      return CreateCpuSampler(batch_size, sampler_params);
+      return CreateCpuSampler(batch_size, sequence_size_value, sampler_params);
     default:
       return absl::InvalidArgumentError(
           absl::StrCat("Unsupported backend: ", backend));

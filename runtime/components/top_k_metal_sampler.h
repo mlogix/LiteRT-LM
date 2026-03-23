@@ -57,7 +57,7 @@ typedef void LiteRtTopKMetalSampler_SamplerParameters;
 typedef void LiteRtTopKMetalSampler_ActivationDataType;
 
 SAMPLER_EXPORT int LiteRtTopKMetalSampler_Create(
-    LiteRtEnvironment env, int batch_size, int vocab_size,
+    LiteRtEnvironment env, int batch_size, int sequence_size, int vocab_size,
     const LiteRtTopKMetalSampler_ActivationDataType*
         activation_data_type,
     const LiteRtTopKMetalSampler_SamplerParameters*
@@ -92,7 +92,7 @@ namespace litert::lm {
 class TopKMetalSampler : public TopKGpuSampler {
  public:
   static absl::StatusOr<std::unique_ptr<TopKMetalSampler>> Create(
-      Environment* env, int batch_size, int vocab_size,
+      Environment* env, int batch_size, int sequence_size, int vocab_size,
       std::optional<ActivationDataType> activation_data_type,
       proto::SamplerParameters sampler_params);
 
