@@ -26,10 +26,7 @@ cc_library(
     name = "io_types",
     srcs = ["io_types.cc"],
     hdrs = ["io_types.h"],
-    deps = [
-        "@com_google_absl//absl/status",
-        "@nlohmann_json//:json",
-    ],
+    deps = ["@nlohmann_json//:json"],
 )
 
 cc_library(
@@ -53,10 +50,10 @@ cc_library(
     deps = [
         ":io_types",
         "@com_google_absl//absl/functional:any_invocable",
-        "@com_google_absl//absl/log:absl_log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@nlohmann_json//:json",
         "//runtime/conversation/model_data_processor",
         "//runtime/conversation/model_data_processor:config_registry",
         "//runtime/engine:io_types",
@@ -119,6 +116,7 @@ cc_library(
         "//runtime/proto:llm_model_type_cc_proto",
         "//runtime/util:litert_status_util",
         "//runtime/util:model_type_utils",
+        "@com_googlesource_code_re2//:re2",
     ],
 )
 

@@ -21,6 +21,7 @@
 #include <variant>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"  // from @com_google_absl
 #include "absl/functional/any_invocable.h"  // from @com_google_absl
 #include "absl/memory/memory.h"  // from @com_google_absl
 #include "absl/status/status.h"  // from @com_google_absl
@@ -48,6 +49,7 @@
 #include "runtime/proto/llm_model_type.pb.h"
 #include "runtime/util/model_type_utils.h"
 #include "runtime/util/status_macros.h"
+#include "re2/re2.h"  // from @com_googlesource_code_re2
 
 namespace litert::lm {
 
@@ -71,6 +73,48 @@ bool IsEmptyPreface(const Preface& preface) {
          (json_preface.extra_context.is_null() ||
           json_preface.extra_context.empty());
 }
+absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
+ExtractChannelText(const std::vector<Channel>& channels, Responses& responses) {
+  absl::flat_hash_map<std::string, std::string> extracted_fields;
+  if (responses.GetTexts().empty()) {
+    return extracted_fields;
+  }
+
+  if (responses.GetTexts().size() > 1) {
+    return absl::InvalidArgumentError(
+        "When extracting channel text, responses must not have more than one "
+        "text.");
+  }
+
+  if (!responses.GetTexts().empty()) {
+    std::string content = responses.GetTexts()[0];
+    for (const auto& channel : channels) {
+      std::string escaped_start = RE2::QuoteMeta(channel.start);
+      std::string escaped_end = RE2::QuoteMeta(channel.end);
+      RE2 re("(?s)(.*?)" + escaped_start + "(.*?)" + escaped_end);
+
+      std::string channel_content;
+      std::string new_content;
+      absl::string_view remaining_content(content);
+      std::string text_before;
+      std::string text_inside;
+
+      while (RE2::Consume(&remaining_content, re, &text_before, &text_inside)) {
+        new_content += text_before;
+        channel_content += text_inside;
+      }
+      new_content += std::string(remaining_content);
+
+      if (!channel_content.empty()) {
+        content = new_content;
+        extracted_fields[channel.channel_name] += channel_content;
+      }
+    }
+    responses.GetMutableTexts()[0] = content;
+  }
+  return extracted_fields;
+}
+
 }  // namespace
 
 absl::StatusOr<ConversationConfig> ConversationConfig::CreateDefault(
@@ -84,7 +128,8 @@ absl::StatusOr<ConversationConfig> ConversationConfig::CreateInternal(
     std::optional<PromptTemplate> overwrite_prompt_template,
     std::optional<DataProcessorConfig> overwrite_processor_config,
     bool enable_constrained_decoding, bool prefill_preface_on_init,
-    std::optional<ConstraintProviderConfig> constraint_provider_config) {
+    std::optional<ConstraintProviderConfig> constraint_provider_config,
+    std::optional<std::vector<Channel>> overwrite_channels) {
   if (preface.has_value() && !std::holds_alternative<JsonPreface>(*preface)) {
     return absl::InvalidArgumentError("Only JsonPreface is supported for now.");
   }
@@ -116,6 +161,25 @@ absl::StatusOr<ConversationConfig> ConversationConfig::CreateInternal(
         "Failed to select jinja prompt template. No llm metadata provided.");
   }
 
+  std::vector<Channel> channels;
+  if (overwrite_channels.has_value()) {
+    channels = *std::move(overwrite_channels);
+  } else if (metadata.has_value()) {
+    for (const auto& channel : metadata->channels()) {
+      channels.push_back(
+          litert::lm::Channel{.channel_name = channel.channel_name(),
+                              .start = channel.start(),
+                              .end = channel.end()});
+    }
+  }
+
+  for (const auto& channel : channels) {
+    if (channel.channel_name.empty()) {
+      return absl::InvalidArgumentError(
+          "Custom channel must have a non-empty channel_name.");
+    }
+  }
+
   DataProcessorConfig processor_config;
   if (overwrite_processor_config.has_value()) {
     // Use the overwrite processor config if provided.
@@ -130,7 +194,7 @@ absl::StatusOr<ConversationConfig> ConversationConfig::CreateInternal(
   return ConversationConfig(
       session_config_copy, preface.value_or(JsonPreface()), prompt_template,
       processor_config, enable_constrained_decoding, prefill_preface_on_init,
-      std::move(constraint_provider_config));
+      std::move(constraint_provider_config), std::move(channels));
 }
 
 absl::StatusOr<std::string>
@@ -377,12 +441,33 @@ absl::StatusOr<Message> Conversation::SendMessage(const Message& message,
         auto decode_config,
         CreateDecodeConfig(std::move(optional_args.decoding_constraint),
                            optional_args.max_output_tokens));
-    ASSIGN_OR_RETURN(const Responses& responses,
-                     session_->RunDecode(decode_config));
+    ASSIGN_OR_RETURN(Responses responses, session_->RunDecode(decode_config));
+
+    ASSIGN_OR_RETURN(auto extracted_fields,
+                     ExtractChannelText(config_.GetChannels(), responses));
+
     ASSIGN_OR_RETURN(
-        const Message assistant_message,
+        Message assistant_message,
         model_data_processor_->ToMessage(
             responses, optional_args.args.value_or(std::monostate())));
+
+    if (std::holds_alternative<nlohmann::ordered_json>(assistant_message)) {
+      auto& json_msg = std::get<nlohmann::ordered_json>(assistant_message);
+      for (const auto& [channel_name, value] : extracted_fields) {
+        if (!json_msg.contains("channels") ||
+            !json_msg["channels"].is_object()) {
+          json_msg["channels"] = nlohmann::ordered_json::object();
+        }
+        if (json_msg["channels"].contains(channel_name) &&
+            json_msg["channels"][channel_name].is_string()) {
+          json_msg["channels"][channel_name] =
+              std::string(json_msg["channels"][channel_name]) + value;
+        } else {
+          json_msg["channels"][channel_name] = value;
+        }
+      }
+    }
+
     history_.push_back(assistant_message);
     return assistant_message;
   }
@@ -430,6 +515,7 @@ absl::Status Conversation::SendMessageAsync(
       std::make_shared<absl::AnyInvocable<void(absl::StatusOr<Responses>)>>(
           CreateInternalCallback(*model_data_processor_,
                                  optional_args.args.value_or(std::monostate()),
+                                 config_.GetChannels(),
                                  std::move(user_callback),
                                  std::move(cancel_callback),
                                  std::move(complete_message_callback)));
