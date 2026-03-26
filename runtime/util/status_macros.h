@@ -18,7 +18,7 @@
 #include <sstream>
 
 #include "absl/status/status.h"  // from @com_google_absl
-#include "litert/cc/litert_macros.h"  // from @litert  // IWYU pragma: export
+#include "litert/cc/litert_macros.h"  // from @litert
 
 // Minimal implementations of status_macros.h and ret_check.h.
 
