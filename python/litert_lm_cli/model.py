@@ -79,14 +79,21 @@ def load_preset(preset: str):
 
 
 _GREEN = "\033[92m"
+_BLUE = "\033[94m"
 _RESET = "\033[0m"
 
 
 class LoggingToolEventHandler(litert_lm.ToolEventHandler):
   """Log tool call and tool response events."""
 
+  def __init__(self, model):
+    self.model = model
+
   def approve_tool_call(self, tool_call):
     """Logs a tool call."""
+    if self.model.active_channel is not None:
+      print(f"\n{_RESET}", end="", flush=True)
+      self.model.active_channel = None
     print(f"{_GREEN}[tool_call] {json.dumps(tool_call['function'])}{_RESET}")
     return True
 
@@ -111,10 +118,13 @@ class Model:
   Attributes:
     model_id: The ID of the model.
     model_path: The local path to the model file.
+    active_channel: The name of the currently active channel, or None if default
+      text is being printed.
   """
 
   model_id: str
   model_path: str
+  active_channel: str | None = None
 
   def exists(self) -> bool:
     """Returns True if the model file exists locally."""
@@ -157,7 +167,7 @@ class Model:
         if tools is None and messages is None and extra_context is None:
           return
 
-      handler = LoggingToolEventHandler() if tools else None
+      handler = LoggingToolEventHandler(self) if tools else None
 
       if is_android:
         if not _HAS_ADB:
@@ -212,14 +222,32 @@ class Model:
 
   def _execute_prompt(self, conversation, prompt):
     """Executes a single prompt and prints the result."""
+    self.active_channel = None
     stream = conversation.send_message_async(prompt)
     try:
       for chunk in stream:
+        # Handle regular content
         content_list = chunk.get("content", [])
         for item in content_list:
           if item.get("type") == "text":
+            if self.active_channel is not None:
+              print(f"\n{_RESET}", end="", flush=True)
+              self.active_channel = None
             print(item.get("text", ""), end="", flush=True)
-      print()
+
+        # Handle channels
+        channels = chunk.get("channels", {})
+        for channel_name, channel_content in channels.items():
+          if self.active_channel != channel_name:
+            if self.active_channel is not None:
+              print(f"\n{_RESET}", end="", flush=True)
+            print(f"{_BLUE}[{channel_name}] ", end="", flush=True)
+            self.active_channel = channel_name
+          print(channel_content, end="", flush=True)
+      if self.active_channel is not None:
+        print(_RESET)
+      else:
+        print()
     except KeyboardInterrupt:
       conversation.cancel_process()
       # Empty the iterator queue.

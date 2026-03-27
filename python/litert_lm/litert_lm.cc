@@ -717,7 +717,8 @@ NB_MODULE(litert_lm_ext, module) {
                       HandleToolCalls(json_msg, tool_map, tool_event_handler);
                 }
 
-                if (json_msg.contains("content")) {
+                if (json_msg.contains("content") ||
+                    json_msg.contains("channels")) {
                   iterator->Push(std::move(message));
                 } else if (json_msg.empty()) {
                   if (state->pending_tool_response != nullptr) {
